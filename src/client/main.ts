@@ -42,10 +42,11 @@ async function main() {
     let num = randNumber();
     console.log("Prepare to store the number: ", num);
 
-    await storeNumber(num, pubkey, programId, payer, connection);
+    await storeNumber(num + '', pubkey, programId, payer, connection);
     console.log("Stored number success!");
 
     let storedNum = await getNumber(pubkey, connection);
+    
     console.log("Get stored number from the chain: ", storedNum);
 
   } catch(err) {

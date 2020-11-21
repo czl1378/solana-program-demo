@@ -44,9 +44,14 @@ fn process_instruction(
     let mut data = account.try_borrow_mut_data()?;
    
     let num_str = from_utf8(instruction_data).map_err(|_| ProgramError::InvalidInstructionData)?;
-    let num = num_str.to_string().parse::<u32>().unwrap();
+    
+    let num = num_str.to_string().parse::<u32>();
 
-    LittleEndian::write_u32(&mut data[0..], num);
+    if num.is_err() {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    LittleEndian::write_u32(&mut data[0..], num.unwrap());
 
     info!("Stored number success!");
     Ok(())

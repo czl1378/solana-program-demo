@@ -30,7 +30,7 @@ interface LoadProgramResult {
 }
 
 const demoAccountDataLayout = BufferLayout.struct([
-  BufferLayout.u32('num'),
+  BufferLayout.u32('number'),
 ]);
 
 
@@ -136,12 +136,12 @@ export async function loadProgram(pathToProgram: string, payerAccount: Account, 
 /**
  * Store the number
  */
-export async function storeNumber(num: number, pubkey: PublicKey, programId: PublicKey, payerAccount: Account, connection: Connection): Promise<void> {
+export async function storeNumber(num: string, pubkey: PublicKey, programId: PublicKey, payerAccount: Account, connection: Connection): Promise<void> {
 
   const instruction = new TransactionInstruction({
     keys: [{pubkey, isSigner: false, isWritable: true}],
     programId,
-    data: Buffer.alloc(num), // All instructions are hellos
+    data: Buffer.from(num), // All instructions are hellos
   });
 
   await sendAndConfirmTransaction(
@@ -166,6 +166,6 @@ export async function getNumber(pubkey: PublicKey, connection: Connection): Prom
   }
 
   const info = demoAccountDataLayout.decode(Buffer.from(accountInfo.data));
-  console.log(info);
-  return info.toString();
+ 
+  return info.number;
 }
