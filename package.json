@@ -1,0 +1,25 @@
+{
+  "name": "solana-program-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "testnetDefaultChannel": "v1.4.8",
+  "scripts": {
+    "start": "ts-node src/client/main.ts",
+    "localnet:update": "solana-localnet update",
+    "localnet:up": "set -x; solana-localnet down; set -e; solana-localnet up",
+    "localnet:down": "solana-localnet down",
+    "build:program-rust": "cargo build-bpf --manifest-path=./src/program-rust/Cargo.toml --bpf-out-dir=dist/program && mv dist/program/solana_program_demo.so dist/program/demo.so"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@tsconfig/recommended": "^1.0.1",
+    "ts-node": "^9.0.0",
+    "typescript": "^4.1.2"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^0.87.1"
+  }
+}

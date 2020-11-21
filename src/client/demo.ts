@@ -1,0 +1,171 @@
+import {
+  Account,
+  Connection,
+  Version,
+  BpfLoader,
+  BPF_LOADER_PROGRAM_ID,
+  PublicKey,
+  LAMPORTS_PER_SOL,
+  SystemProgram,
+  TransactionInstruction,
+  Transaction,
+  sendAndConfirmTransaction,
+} from '@solana/web3.js';
+
+// @ts-ignore
+import BufferLayout from 'buffer-layout';
+
+import fs from 'fs';
+
+import {newAccountWithLamports} from './util/new-account-with-lamports';
+
+interface ConnectionResult {
+  connection: Connection;
+  version: Version;
+}
+
+interface LoadProgramResult {
+  programId: PublicKey;
+  pubkey: PublicKey;
+}
+
+const demoAccountDataLayout = BufferLayout.struct([
+  BufferLayout.u32('num'),
+]);
+
+
+/**
+ * Establish a connection to the cluster
+ */
+export async function establishConnection(url: string): Promise<ConnectionResult> {
+  let connection = new Connection(url, 'singleGossip');
+  const version = await connection.getVersion();
+  return {
+    connection, version
+  }
+}
+
+/**
+ * Caculate the pay fees
+ */
+export async function calculatePayfees(pathToProgram: string, connection: Connection): Promise<number> {
+  let fees = 0;
+  const {feeCalculator} = await connection.getRecentBlockhash();
+
+  // Calculate the cost to load the program
+  const data = fs.readFileSync(pathToProgram);
+  const NUM_RETRIES = 500; // allow some number of retries
+  fees +=
+    feeCalculator.lamportsPerSignature *
+      (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES) +
+    (await connection.getMinimumBalanceForRentExemption(data.length));
+
+  // Calculate the cost to fund the greeter account
+  fees += await connection.getMinimumBalanceForRentExemption(
+    demoAccountDataLayout.span,
+  );
+
+  // Calculate the cost of sending the transactions
+  fees += feeCalculator.lamportsPerSignature * 100; // wag
+
+  return fees;
+}
+
+/**
+ * Establish an account to pay for everything
+ */
+export async function establishPayer(fees: number, connection: Connection): Promise<Account> {
+
+  // Fund a new payer via airdrop
+  let payerAccount = await newAccountWithLamports(connection, fees);
+  
+  return payerAccount;
+}
+
+/**
+ * Load the hello world BPF program if not already loaded
+ */
+export async function loadProgram(pathToProgram: string, payerAccount: Account, connection: Connection): Promise<LoadProgramResult> {
+ 
+  const data = fs.readFileSync(pathToProgram);
+  const programAccount = new Account();
+  await BpfLoader.load(
+    connection,
+    payerAccount,
+    programAccount,
+    data,
+    BPF_LOADER_PROGRAM_ID,
+  );
+
+  const programId = programAccount.publicKey;
+
+  // Create the demo account
+  const demoAccount = new Account();
+  const demoPubkey = demoAccount.publicKey;
+
+  const space = demoAccountDataLayout.span;
+  const lamports = await connection.getMinimumBalanceForRentExemption(
+    demoAccountDataLayout.span,
+  );
+
+  const transaction = new Transaction().add(
+    SystemProgram.createAccount({
+      fromPubkey: payerAccount.publicKey,
+      newAccountPubkey: demoPubkey,
+      lamports,
+      space,
+      programId,
+    }),
+  );
+
+  await sendAndConfirmTransaction(
+    connection,
+    transaction,
+    [payerAccount, demoAccount],
+    {
+      commitment: 'singleGossip',
+      preflightCommitment: 'singleGossip',
+    },
+  );
+  
+  return {
+    programId, pubkey: demoPubkey
+  };
+}
+
+/**
+ * Store the number
+ */
+export async function storeNumber(num: number, pubkey: PublicKey, programId: PublicKey, payerAccount: Account, connection: Connection): Promise<void> {
+
+  const instruction = new TransactionInstruction({
+    keys: [{pubkey, isSigner: false, isWritable: true}],
+    programId,
+    data: Buffer.alloc(num), // All instructions are hellos
+  });
+
+  await sendAndConfirmTransaction(
+    connection,
+    new Transaction().add(instruction),
+    [payerAccount],
+    {
+      commitment: 'singleGossip',
+      preflightCommitment: 'singleGossip',
+    },
+  );
+
+}
+
+/**
+ * Get the stored number
+ */
+export async function getNumber(pubkey: PublicKey, connection: Connection): Promise<string> {
+  const accountInfo = await connection.getAccountInfo(pubkey);
+  if (accountInfo === null) {
+    throw 'Error: cannot find the demo account';
+  }
+
+  const info = demoAccountDataLayout.decode(Buffer.from(accountInfo.data));
+  console.log(info);
+  return info.toString();
+}
